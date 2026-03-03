@@ -3,13 +3,18 @@
   "name": "Example-static App",
   "author": "IAMMETER",
   "description": "A fully static web application (no backend required) that provides a customizable monitoring dashboard for IAMMETER energy meters.",
-  "tags": ["example","static"],
   "version": "0.5.0",
+  "category": "monitoring",
+  "type": "open-source",
   "runtime": "static",
+  "tags": ["example", "template", "static","official"],
   "entry": "frontend/index.html",
   "configSchema": [],
   "links": {
+    "homepage": "https://github.com/IAMMETER/appstore/tree/main/apps/example-static",
     "source": "https://github.com/IAMMETER/appstore",
-    "docs": "apps/example-static/README.md"
+    "docs": "https://github.com/IAMMETER/appstore/blob/main/apps/example-static/README.md",
+    "preview": "https://iammeter.github.io/appstore/apps/example-static/frontend/index.html",
+    "screenshot": "https://iammeter.github.io/appstore/apps/example-static/screenshot.jpg"
   }
 }

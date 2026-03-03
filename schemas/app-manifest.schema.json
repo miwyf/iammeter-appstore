@@ -1,131 +1,117 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://example.com/schemas/app-manifest.schema.json",
-  "title": "IAMMETER App Center Manifest",
+  "$id": "https://iammeter.github.io/appstore/schemas/app-manifest.schema.json",
+  "title": "IAMMETER AppStore Manifest (v1.1)",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "name", "author", "description", "tags", "version", "runtime", "entry", "configSchema", "links"],
+  "required": [
+    "id",
+    "name",
+    "description",
+    "version",
+    "category",
+    "type",
+    "runtime",
+    "tags",
+    "links"
+  ],
   "properties": {
     "id": {
       "type": "string",
+      "description": "Unique app id (kebab-case). Should match folder name under apps/<id>/manifest.json",
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
       "minLength": 3,
       "maxLength": 80
     },
     "name": { "type": "string", "minLength": 2, "maxLength": 80 },
-    "author": { "type": "string", "minLength": 2, "maxLength": 80 },
-    "description": { "type": "string", "minLength": 10, "maxLength": 200 },
-    "tags": {
-      "type": "array",
-      "minItems": 1,
-      "maxItems": 12,
-      "items": { "type": "string", "minLength": 1, "maxLength": 24 }
+    "description": { "type": "string", "minLength": 10, "maxLength": 300 },
+
+    "author": {
+      "type": "string",
+      "description": "Optional author/maintainer name",
+      "minLength": 2,
+      "maxLength": 80
     },
+
     "version": {
       "type": "string",
-      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+      "description": "SemVer string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
     },
-    "runtime": { "type": "string", "enum": ["static", "hosted", "external"] },
+
+    "category": {
+      "type": "string",
+      "enum": ["monitoring", "control", "integration", "analytics", "tooling", "other"]
+    },
+
+    "type": {
+      "type": "string",
+      "enum": ["open-source", "proprietary"]
+    },
+
+    "runtime": {
+      "type": "string",
+      "enum": ["static", "hosted", "saas"]
+    },
+
+    "tags": {
+      "type": "array",
+      "description": "Tag list (e.g. template/example/static/hosted/official/community)",
+      "items": { "type": "string", "minLength": 1, "maxLength": 30 },
+      "minItems": 0,
+      "maxItems": 20,
+      "uniqueItems": true
+    },
+
     "entry": {
       "type": "string",
-      "minLength": 3,
-      "maxLength": 200
+      "description": "Optional entry file path relative to app folder (e.g. frontend/index.html)",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*\\s).+\\.html$"
     },
+
     "configSchema": {
       "type": "array",
-      "minItems": 0,
-      "maxItems": 30,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["key", "label", "type"],
-        "properties": {
-          "key": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$" },
-          "label": { "type": "string", "minLength": 1, "maxLength": 50 },
-          "type": { "type": "string", "enum": ["text", "password", "number", "select", "checkbox"] },
-          "required": { "type": "boolean", "default": false },
-          "placeholder": { "type": "string", "maxLength": 80 },
-          "help": { "type": "string", "maxLength": 160 },
-          "options": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 100,
-            "items": { "type": "string", "minLength": 1, "maxLength": 80 }
-          },
-          "default": {}
-        },
-        "allOf": [
-          {
-            "if": { "properties": { "type": { "const": "select" } }, "required": ["type"] },
-            "then": { "required": ["options"] }
-          }
-        ]
-      }
+      "description": "Optional. Keep for backward compatibility (array of schema items).",
+      "items": {},
+      "minItems": 0
     },
+
     "links": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source", "docs"],
+      "required": ["homepage"],
       "properties": {
-        "source": { "type": "string", "minLength": 10, "maxLength": 300 },
-        "docs": { "type": "string", "minLength": 3, "maxLength": 300 }
-      }
-    },
-    "demo": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "hasMock": { "type": "boolean" },
-        "mockNote": { "type": "string", "maxLength": 160 }
-      }
-    },
-    "hosted": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["status"],
-      "properties": {
-        "status": { "type": "string", "enum": ["pending", "deployed", "deprecated"] },
-        "hostedUrl": { "type": "string", "maxLength": 300, "default": "" },
-        "gateway": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "health": { "type": "string", "const": "/health" },
-            "wsPath": { "type": "string", "const": "/ws" },
-            "apiBase": { "type": "string", "const": "/api" }
-          }
-        }
+        "homepage": { "type": "string", "format": "uri" },
+
+        "preview": { "$ref": "#/definitions/urlOrRepoPath" },
+
+        "docs": {
+          "type": "string",
+          "format": "uri",
+          "description": "Docs MUST be an absolute URL in v1.1 (no repo-relative path)."
+        },
+
+        "source": { "type": "string", "format": "uri" },
+
+        "screenshot": { "$ref": "#/definitions/urlOrRepoPath" }
       }
     }
   },
-  "allOf": [
-    {
-      "if": { "properties": { "runtime": { "const": "hosted" } }, "required": ["runtime"] },
-      "then": {
-        "required": ["hosted"],
-        "properties": {
-          "hosted": {
-            "required": ["status"],
-            "properties": {
-              "gateway": { "required": ["health", "wsPath", "apiBase"] }
-            }
-          }
+
+  "definitions": {
+    "urlOrRepoPath": {
+      "description": "Either a URL or a repo-relative path (no leading slash).",
+      "anyOf": [
+        { "type": "string", "format": "uri" },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "^(?!/)(?!https?://)(?!.*\\\\)(?!.*\\s).+$"
         }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "runtime": { "const": "hosted" },
-          "hosted": { "properties": { "status": { "const": "deployed" } } }
-        },
-        "required": ["runtime", "hosted"]
-      },
-      "then": {
-        "properties": {
-          "hosted": { "required": ["hostedUrl"] }
-        }
-      }
+      ]
     }
-  ]
+  }
 }

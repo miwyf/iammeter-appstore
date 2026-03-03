@@ -13,6 +13,10 @@ function fail(msg) {
   process.exit(1);
 }
 
+function warn(msg) {
+  console.warn(`⚠️  ${msg}`);
+}
+
 function loadJson(p) {
   try {
     return JSON.parse(fs.readFileSync(p, "utf8"));
@@ -21,9 +25,40 @@ function loadJson(p) {
   }
 }
 
-function exists(relOrAbs, baseDir) {
-  const p = path.isAbsolute(relOrAbs) ? relOrAbs : path.join(baseDir, relOrAbs);
+function isHttpUrl(s) {
+  return /^https?:\/\//i.test(s || "");
+}
+
+function isRepoRelativePath(s) {
+  if (!s || typeof s !== "string") return false;
+  if (isHttpUrl(s)) return false;
+  if (s.startsWith("/")) return false;
+  if (s.includes("\\")) return false;
+  if (/\s/.test(s)) return false;
+  return true;
+}
+
+function fileExistsUnderApp(appDir, relPath) {
+  const p = path.join(appDir, relPath);
   return fs.existsSync(p);
+}
+
+function printAjvErrors(errors) {
+  return (errors || [])
+    .map((e) => {
+      const where = e.instancePath || "/";
+      return `- ${where} ${e.message || ""}`.trim();
+    })
+    .join("\n");
+}
+
+function normalizePosix(p) {
+  return p.split(path.sep).join("/");
+}
+
+function getAppIdFromManifestPath(manifestPath) {
+  const parts = normalizePosix(manifestPath).split("/");
+  return parts.length >= 3 ? parts[1] : null;
 }
 
 const schema = loadJson(SCHEMA_PATH);
@@ -34,65 +69,79 @@ const validate = ajv.compile(schema);
 const manifestFiles = await fg(["apps/*/manifest.json"], { dot: false });
 
 if (manifestFiles.length === 0) {
-  fail("No manifests found under apps/*/manifest.json");
+  fail(`No manifests found at apps/*/manifest.json`);
 }
 
-let okCount = 0;
+let hasError = false;
 
 for (const mf of manifestFiles) {
-  const absMf = path.join(ROOT, mf);
-  const appDir = path.dirname(absMf);
-  const appId = path.basename(appDir);
+  const fullPath = path.join(ROOT, mf);
+  const manifest = loadJson(fullPath);
 
-  const manifest = loadJson(absMf);
+  // 1) Schema validation
+  const ok = validate(manifest);
+  if (!ok) {
+    console.error(`\n❌ Schema validation failed: ${mf}`);
+    console.error(printAjvErrors(validate.errors));
+    hasError = true;
+    continue;
+  }
 
-  // 1) Schema validate
-  const valid = validate(manifest);
-  if (!valid) {
-    console.error(`\n❌ Schema errors in ${mf}`);
-    for (const err of validate.errors || []) {
-      console.error(`  - ${err.instancePath || "(root)"} ${err.message}`);
+  const folderId = getAppIdFromManifestPath(mf);
+  if (!folderId) {
+    console.error(`\n❌ Cannot infer app id from path: ${mf}`);
+    hasError = true;
+    continue;
+  }
+
+  // 2) Path/id consistency
+  if (manifest.id !== folderId) {
+    console.error(
+      `\n❌ id mismatch: manifest.id="${manifest.id}" but folder is "apps/${folderId}/"`
+    );
+    hasError = true;
+  }
+
+  const appDir = path.join(ROOT, "apps", folderId);
+
+  // 3) entry existence (optional)
+  if (manifest.entry) {
+    if (!fileExistsUnderApp(appDir, manifest.entry)) {
+      console.error(
+        `\n❌ Missing entry file for ${manifest.id}: apps/${manifest.id}/${manifest.entry}`
+      );
+      hasError = true;
     }
-    process.exit(1);
   }
 
-  // 2) id must match directory name
-  if (manifest.id !== appId) {
-    fail(`Manifest id mismatch: ${mf}\n  manifest.id="${manifest.id}" but folder="${appId}"`);
+  // 4) screenshot existence if repo-relative path (optional)
+  const links = manifest.links || {};
+  if (links.screenshot && isRepoRelativePath(links.screenshot)) {
+    const shotRel = links.screenshot;
+    if (fs.existsSync(path.join(ROOT, shotRel))) {
+      // ok
+    } else {
+      warn(
+        `${manifest.id}: links.screenshot is a relative path but not found in this repo: "${shotRel}". ` +
+          `If screenshot lives on a different Pages site, use a full URL instead.`
+      );
+    }
   }
 
-  // 3) entry must exist
-  if (!exists(manifest.entry, appDir)) {
-    fail(`Entry not found: ${mf}\n  entry="${manifest.entry}"\n  expected at: ${path.join(appDir, manifest.entry)}`);
+  // 5) tags unique (schema already enforces uniqueItems, but double-check)
+  if (Array.isArray(manifest.tags)) {
+    const set = new Set(manifest.tags);
+    if (set.size !== manifest.tags.length) {
+      console.error(`\n❌ Duplicate tags detected in ${manifest.id}`);
+      hasError = true;
+    }
   }
 
-  // 4) hosted runtime contract check (extra safety)
-// 5) hosted runtime file structure check
-if (manifest.runtime === "hosted") {
-  const backendDir = path.join(appDir, "backend");
-  const frontendDir = path.join(appDir, "frontend");
-
-  const dockerfilePath = path.join(backendDir, "Dockerfile");
-  const serverPath = path.join(backendDir, "src", "server.js");
-
-  if (!fs.existsSync(backendDir)) {
-    fail(`Hosted app missing backend directory: ${mf}`);
-  }
-
-  if (!fs.existsSync(dockerfilePath)) {
-    fail(`Hosted app missing backend/Dockerfile: ${mf}`);
-  }
-
-  if (!fs.existsSync(serverPath)) {
-    fail(`Hosted app missing backend/src/server.js: ${mf}`);
-  }
-
-  if (!fs.existsSync(frontendDir)) {
-    fail(`Hosted app missing frontend directory: ${mf}`);
-  }
+  console.log(`✅ ${manifest.id}: manifest validated`);
 }
 
-  okCount += 1;
+if (hasError) {
+  fail("Manifest validation failed.");
 }
 
-console.log(`✅ Manifests validated: ${okCount}`);
+console.log("\n✅ All manifests validated successfully.");

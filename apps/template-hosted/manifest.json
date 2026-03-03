@@ -2,30 +2,18 @@
   "id": "template-hosted",
   "name": "Hosted App Template",
   "author": "IAMMETER",
-  "description": "A hosted app template with backend /health and /ws endpoints.",
-  "tags": ["template", "hosted"],
+  "description": "A reference hosted application template with frontend and backend structure for IAMMETER integrations.",
   "version": "0.1.0",
+  "category": "integration",
+  "type": "open-source",
   "runtime": "hosted",
+  "tags": ["template", "hosted"],
   "entry": "frontend/index.html",
-  "configSchema": [
-    { "key": "sn", "label": "SN", "type": "text", "required": true, "placeholder": "e.g. 12C3..." },
-    { "key": "token", "label": "Token", "type": "password", "required": true, "placeholder": "IAMMETER API token" }
-  ],
   "links": {
+    "homepage": "https://github.com/IAMMETER/appstore/tree/main/apps/template-hosted",
     "source": "https://github.com/IAMMETER/appstore",
-    "docs": "apps/template-hosted/README.md"
-  },
-  "demo": {
-    "hasMock": true,
-    "mockNote": "If no config is provided, the frontend will show mock data."
-  },
-  "hosted": {
-    "status": "pending",
-    "hostedUrl": "",
-    "gateway": {
-      "health": "/health",
-      "wsPath": "/ws",
-      "apiBase": "/api"
-    }
+    "docs": "https://github.com/IAMMETER/appstore/blob/main/apps/template-hosted/README.md",
+    "preview": "https://github.com/IAMMETER/appstore/blob/main/apps/template-hosted/README.md",
+    "screenshot": "https://"
   }
 }
