@@ -1,4 +1,4 @@
-name: Validate Manifests & Hosted Docker Build
+name: Validate & Publish (Auto)
 
 on:
   pull_request:
@@ -6,15 +6,13 @@ on:
     branches: ["main"]
 
 permissions:
-  contents: read 
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    outputs:
-      has_hosted_change: ${{ steps.detect_hosted.outputs.has_hosted_change }}
-      hosted_dirs: ${{ steps.detect_hosted.outputs.hosted_dirs }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -28,82 +26,48 @@ jobs:
 
       - name: Validate manifests
         run: npm run validate:manifests
+
       - name: Validate screenshots
         run: npm run validate:screenshots
 
-      - name: Detect hosted app changes
-        id: detect_hosted
-        run: |
-          set -e
-
-          # Decide diff range for PR vs push
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
-            HEAD="${{ github.event.pull_request.head.sha }}"
-          else
-            BASE="${{ github.event.before }}"
-            HEAD="${{ github.sha }}"
-          fi
-
-          echo "Diff range: $BASE..$HEAD"
-
-          CHANGED=$(git diff --name-only "$BASE" "$HEAD" || true)
-          echo "$CHANGED"
-
-          # Find hosted apps impacted:
-          # 1) manifest.json of that app changed AND runtime == hosted
-          # 2) any file under apps/<id>/backend/** changed
-          HOSTED_DIRS=""
-
-          while IFS= read -r f; do
-            # backend changed
-            if echo "$f" | grep -Eq '^apps/[^/]+/backend/'; then
-              d=$(echo "$f" | cut -d/ -f1-2)   # apps/<id>
-              HOSTED_DIRS="$HOSTED_DIRS $d"
-              continue
-            fi
-
-            # manifest changed
-            if echo "$f" | grep -Eq '^apps/[^/]+/manifest\.json$'; then
-              d=$(dirname "$f")                # apps/<id>
-              if jq -e '.runtime=="hosted"' "$f" >/dev/null 2>&1; then
-                HOSTED_DIRS="$HOSTED_DIRS $d"
-              fi
-            fi
-          done <<< "$CHANGED"
-
-          # uniq
-          HOSTED_DIRS=$(echo "$HOSTED_DIRS" | tr ' ' '\n' | sed '/^$/d' | sort -u | tr '\n' ' ' | sed 's/ $//')
-
-          if [ -n "$HOSTED_DIRS" ]; then
-            echo "has_hosted_change=true" >> "$GITHUB_OUTPUT"
-            echo "hosted_dirs=$HOSTED_DIRS" >> "$GITHUB_OUTPUT"
-            echo "Hosted dirs: $HOSTED_DIRS"
-          else
-            echo "has_hosted_change=false" >> "$GITHUB_OUTPUT"
-            echo "hosted_dirs=" >> "$GITHUB_OUTPUT"
-            echo "No hosted changes detected."
-          fi
+      # Generate apps/index.json (do NOT commit)
       - name: Generate apps index
         run: npm run generate:app-index
 
-
-  docker-build-hosted:
-    runs-on: ubuntu-latest
+  publish-pages:
+    name: Publish Apps Index (Auto)
     needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
-    # ✅ 只有当本次变更涉及 hosted apps 时才运行这个 job
-    if: needs.validate.outputs.has_hosted_change == 'true'
+    concurrency:
+      group: "pages"
+      cancel-in-progress: true
 
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Build changed hosted apps
-        run: |
-          echo "Building hosted apps changed in this PR/push..."
-          for dir in ${{ needs.validate.outputs.hosted_dirs }}; do
-            echo "Building Docker image for $dir/backend ..."
-            docker build -t hosted-test-image $dir/backend
-          done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      # Re-generate apps/index.json for the published artifact
+      - run: npm run generate:app-index
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+  deploy:
+    name: Deploy GitHub Pages
+    needs: publish-pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    steps:
+      - uses: actions/deploy-pages@v4

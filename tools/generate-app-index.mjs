@@ -5,168 +5,194 @@ import fg from "fast-glob";
 const ROOT = process.cwd();
 const appsDir = path.join(ROOT, "apps");
 
-// If you host the shell on GitHub Pages (recommended):
-// e.g. https://iammeter.github.io/appstore/
+// Defaults (can be overridden by env)
 const DEFAULT_PAGES_BASE_URL = "https://iammeter.github.io/appstore/";
+const DEFAULT_BRANCH = process.env.GITHUB_REF_NAME || "main";
+const DEFAULT_REPO_URL =
+  process.env.REPO_URL ||
+  (process.env.GITHUB_REPOSITORY
+    ? `https://github.com/${process.env.GITHUB_REPOSITORY}`
+    : "https://github.com/IAMMETER/appstore");
 
-// screenshot search order (local file)
-console.log("Using PAGES_BASE_URL =", process.env.PAGES_BASE_URL || DEFAULT_PAGES_BASE_URL);const SCREENSHOT_EXTS = ["png", "jpg", "jpeg"];
+const SCREENSHOT_EXTS = ["png", "jpg", "jpeg", "JPG"];
 
 function ensureTrailingSlash(u) {
   return u.endsWith("/") ? u : u + "/";
 }
+
 function removeTrailingSlash(u) {
   return u.endsWith("/") ? u.slice(0, -1) : u;
 }
-function isHttp(u) {
-  return /^https?:\/\//i.test(u || "");
-}
+
 function buildUrl(base, relPath) {
   const b = ensureTrailingSlash(base);
   const p = relPath.startsWith("/") ? relPath.slice(1) : relPath;
   return new URL(p, b).toString();
 }
-function isGitHubRepoRoot(u) {
-  // expecting: https://github.com/<owner>/<repo>
-  const m = (u || "").match(/^https:\/\/github\.com\/[^/]+\/[^/]+\/?$/i);
-  return !!m;
+
+function isValidHttpUrl(u) {
+  if (!u || typeof u !== "string") return false;
+  if (!/^https?:\/\//i.test(u)) return false;
+  try {
+    const url = new URL(u);
+    return Boolean(url.hostname);
+  } catch {
+    return false;
+  }
 }
-function toGitHubTreeUrl(repoRoot, repoPath, branch = "main") {
-  // repoPath: "apps/example-static"
-  return `${removeTrailingSlash(repoRoot)}/tree/${branch}/${repoPath.replace(/^\/+/, "")}`;
+
+function isRepoRelativePath(s) {
+  if (!s || typeof s !== "string") return false;
+  if (isValidHttpUrl(s)) return false;
+  if (s.startsWith("/")) return false;
+  if (s.includes("\\")) return false;
+  if (/\s/.test(s)) return false;
+  return true;
 }
-function toGitHubBlobUrl(repoRoot, filePath, branch = "main") {
-  // filePath: "apps/example-static/README.md"
-  return `${removeTrailingSlash(repoRoot)}/blob/${branch}/${filePath.replace(/^\/+/, "")}`;
+
+function buildGitHubDirUrl(repoRoot, branch, appId) {
+  return `${repoRoot}/tree/${branch}/apps/${appId}`;
 }
-function toGitHubRawUrl(repoRoot, filePath, branch = "main") {
-  // repoRoot: https://github.com/owner/repo
-  const parts = removeTrailingSlash(repoRoot).replace("https://github.com/", "").split("/");
+
+function buildGitHubBlobUrl(repoRoot, branch, filePath) {
+  return `${repoRoot}/blob/${branch}/${filePath}`;
+}
+
+function buildRawUrl(repoRoot, branch, filePath) {
+  const parts = repoRoot.replace("https://github.com/", "").split("/");
   const owner = parts[0];
   const repo = parts[1];
-  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath.replace(/^\/+/, "")}`;
+  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`;
 }
 
-function findLocalScreenshotRel(appId) {
+function findScreenshotInRepo(appId) {
   const appRoot = path.join(ROOT, "apps", appId);
-  if (!fs.existsSync(appRoot)) return null;
-
-  // allow screenshot.(png|jpg|jpeg) (case-insensitive)
-  const files = fs.readdirSync(appRoot);
   for (const ext of SCREENSHOT_EXTS) {
-    const re = new RegExp(`^screenshot\\.${ext}$`, "i");
-    const hit = files.find((f) => re.test(f));
-    if (hit) return `apps/${appId}/${hit}`;
+    const file = `screenshot.${ext}`;
+    const full = path.join(appRoot, file);
+    if (fs.existsSync(full)) return `apps/${appId}/${file}`;
   }
   return null;
 }
 
+function resolveMaybeUrlOrPath(value, pagesBase) {
+  // returns { url: string|null, kind: 'url'|'path'|'none' }
+  if (!value) return { url: null, kind: "none" };
+
+  if (isValidHttpUrl(value)) return { url: value, kind: "url" };
+
+  if (isRepoRelativePath(value)) {
+    // treat as Pages-relative path
+    return { url: buildUrl(pagesBase, value), kind: "path" };
+  }
+
+  // invalid (e.g. "https://", empty, spaces)
+  return { url: null, kind: "none" };
+}
+
 async function main() {
   const manifestFiles = await fg(["apps/*/manifest.json"]);
-  const pagesBase = ensureTrailingSlash(process.env.PAGES_BASE_URL || DEFAULT_PAGES_BASE_URL);
-
   const apps = [];
 
-  for (const mf of manifestFiles) {
-    const manifestPath = path.join(ROOT, mf);
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const pagesBase = ensureTrailingSlash(
+    process.env.PAGES_BASE_URL || DEFAULT_PAGES_BASE_URL
+  );
+
+  const repoRoot = removeTrailingSlash(DEFAULT_REPO_URL);
+  const branch = DEFAULT_BRANCH;
+
+  for (const file of manifestFiles) {
+    const fullPath = path.join(ROOT, file);
+    const manifest = JSON.parse(fs.readFileSync(fullPath, "utf8"));
 
     const links = manifest.links || {};
 
-    // repoRoot should be a repo root URL (prefer links.source)
-    const repoRoot = removeTrailingSlash(links.source || manifest.source || "");
+    // entry in index.json is repo-relative (apps/<id>/<entry>)
+    const entryPath = manifest.entry
+      ? `apps/${manifest.id}/${manifest.entry}`
+      : null;
 
-    // Where the app lives inside repoRoot (optional). Default to apps/<id>
-    const sourcePath = (links.sourcePath || `apps/${manifest.id}`).replace(/^\/+/, "");
+    // Resolve links
+    const homepageUrl = isValidHttpUrl(links.homepage) ? links.homepage : null;
+    const docsUrl = isValidHttpUrl(links.docs) ? links.docs : null;
 
-    // Docs can be a URL or a repo-relative path
-    const docs = links.docs || manifest.docs || "";
+    // open-source may have source; proprietary typically not
+    const sourceUrl = isValidHttpUrl(links.source) ? links.source : null;
 
-    // Preview/Homepage can be direct URLs
-    const homepage = links.homepage || "";
-    const preview = links.preview || "";
+    // preview can be URL or repo-relative path (to Pages)
+    const previewResolved = resolveMaybeUrlOrPath(links.preview, pagesBase);
 
-    // Entry path inside this repository (if it exists here)
-    const entryRel = `apps/${manifest.id}/${manifest.entry}`;
-    const entryAbs = path.join(ROOT, entryRel);
+    // screenshot can be URL or repo-relative path
+    let screenshotResolved = resolveMaybeUrlOrPath(links.screenshot, pagesBase);
 
-    // Build pagesUrl only if this repo actually contains the entry file
-    const pagesUrl = fs.existsSync(entryAbs) ? buildUrl(pagesBase, entryRel) : null;
-
-    // screenshot: prefer links.screenshot (URL or relative), else local file
-    let screenshotUrl = null;
-    if (links.screenshot) {
-      if (isHttp(links.screenshot)) screenshotUrl = links.screenshot;
-      else screenshotUrl = buildUrl(pagesBase, links.screenshot.replace(/^\/+/, ""));
-    } else {
-      const localShot = findLocalScreenshotRel(manifest.id);
-      if (localShot) screenshotUrl = buildUrl(pagesBase, localShot);
+    // if screenshot not set in manifest, try auto-detect apps/<id>/screenshot.(png|jpg|jpeg|JPG)
+    if (!screenshotResolved.url) {
+      const found = findScreenshotInRepo(manifest.id);
+      if (found) screenshotResolved = { url: buildUrl(pagesBase, found), kind: "path" };
     }
 
-    // Source URL (directory)
-    let sourceUrl = null;
-    if (repoRoot) {
-      if (isGitHubRepoRoot(repoRoot)) sourceUrl = toGitHubTreeUrl(repoRoot, sourcePath, links.branch || "main");
-      else sourceUrl = repoRoot; // non-github: just show the link
-    }
+    // pagesUrl only makes sense if entry exists (static apps normally)
+    const pagesUrl = entryPath ? buildUrl(pagesBase, entryPath) : null;
 
-    // Docs URL
-    let docsUrl = null;
-    if (docs) {
-      if (isHttp(docs)) docsUrl = docs;
-      else if (repoRoot && isGitHubRepoRoot(repoRoot)) docsUrl = toGitHubBlobUrl(repoRoot, docs, links.branch || "main");
-      // else leave null (no safe way to build)
-    }
+    // Determine openUrl:
+    // 1) manifest links.preview (if provided)
+    // 2) pagesUrl (if exists)
+    // 3) homepageUrl
+    const openUrl = previewResolved.url || pagesUrl || homepageUrl || null;
 
-    // Raw entry URL (only meaningful for GitHub repos)
-    let rawFileUrl = null;
-    if (repoRoot && isGitHubRepoRoot(repoRoot)) {
-      rawFileUrl = toGitHubRawUrl(repoRoot, entryRel, links.branch || "main");
-    }
+    // raw file url: only meaningful if repoRoot is github and entryPath exists
+    const rawFileUrl =
+      repoRoot && entryPath && repoRoot.startsWith("https://github.com/")
+        ? buildRawUrl(repoRoot, branch, entryPath)
+        : null;
 
-    // Decide main Open URL:
-    // prefer preview (explicit), else pagesUrl (if entry exists in this repo), else homepage
-    const openUrl = preview || pagesUrl || homepage || null;
-
-    apps.push({
+    const app = {
       id: manifest.id,
       name: manifest.name,
       description: manifest.description,
-      author: manifest.author,
+      author: manifest.author || null,
       version: manifest.version,
-      tags: manifest.tags || [],
+
+      category: manifest.category || "other",
+      type: manifest.type || null,
       runtime: manifest.runtime,
 
-      // Keep entry for reference
-      entry: entryRel,
+      tags: Array.isArray(manifest.tags) ? manifest.tags : [],
 
-      // Links for the shell
+      entry: entryPath,
+
       openUrl,
-      previewUrl: preview || null,
-      homepageUrl: homepage || null,
+      previewUrl: previewResolved.url || null,
+      homepageUrl,
+      sourceUrl: sourceUrl
+        ? sourceUrl
+        : (manifest.type === "open-source"
+            ? buildGitHubDirUrl(repoRoot, branch, manifest.id)
+            : null),
 
-      sourceUrl,
       docsUrl,
-      screenshotUrl,
+      screenshotUrl: screenshotResolved.url || null,
 
-      // optional extras (debug / advanced)
       repoUrl: repoRoot || null,
-      sourcePath: repoRoot ? sourcePath : null,
+      sourcePath: `apps/${manifest.id}`,
       pagesUrl,
-      rawFileUrl,
-    });
+      rawFileUrl
+    };
+
+    apps.push(app);
   }
 
   apps.sort((a, b) => a.id.localeCompare(b.id));
 
   const outputPath = path.join(appsDir, "index.json");
+
   fs.writeFileSync(
     outputPath,
     JSON.stringify(
       {
         generatedAt: new Date().toISOString(),
         total: apps.length,
-        apps,
+        apps
       },
       null,
       2
