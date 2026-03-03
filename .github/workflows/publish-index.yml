@@ -27,8 +27,6 @@ jobs:
 
       # 生成 apps/index.json（不提交到仓库）
       - run: npm run generate:app-index
-        env:
-          PAGES_BASE_URL: https://iammeter.github.io/IAMMETER-OpenApps/
 
       # 发布根目录（包含 apps/** 静态资源 + 生成的 apps/index.json）
       - uses: actions/upload-pages-artifact@v3

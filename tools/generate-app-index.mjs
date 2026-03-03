@@ -10,7 +10,7 @@ const appsDir = path.join(ROOT, "apps");
 const DEFAULT_PAGES_BASE_URL = "https://iammeter.github.io/appstore/";
 
 // screenshot search order (local file)
-const SCREENSHOT_EXTS = ["png", "jpg", "jpeg"];
+console.log("Using PAGES_BASE_URL =", process.env.PAGES_BASE_URL || DEFAULT_PAGES_BASE_URL);const SCREENSHOT_EXTS = ["png", "jpg", "jpeg"];
 
 function ensureTrailingSlash(u) {
   return u.endsWith("/") ? u : u + "/";
