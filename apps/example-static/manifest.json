@@ -9,7 +9,7 @@
   "entry": "frontend/index.html",
   "configSchema": [],
   "links": {
-    "source": "https://github.com/IAMMETER/IAMMETER-OpenApps",
+    "source": "https://github.com/IAMMETER/appstore",
     "docs": "apps/example-static/README.md"
   }
 }

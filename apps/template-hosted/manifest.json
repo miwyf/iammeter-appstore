@@ -12,7 +12,7 @@
     { "key": "token", "label": "Token", "type": "password", "required": true, "placeholder": "IAMMETER API token" }
   ],
   "links": {
-    "source": "https://github.com/IAMMETER/IAMMETER-OpenApps",
+    "source": "https://github.com/IAMMETER/appstore",
     "docs": "apps/template-hosted/README.md"
   },
   "demo": {
