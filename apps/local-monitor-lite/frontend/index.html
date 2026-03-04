@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Local Monitor Lite</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --ok: #22c55e;
+      --bad: #ef4444;
+      --accent: #38bdf8;
+      --border: #1f2937;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: linear-gradient(160deg, #020617, #0f172a);
+      color: var(--text);
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 20px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .sub { color: var(--muted); margin-bottom: 18px; }
+    .panel {
+      background: rgba(17, 24, 39, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+    .field { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
+    label { color: var(--muted); font-size: 12px; }
+    input, select, button {
+      height: 38px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      background: #0b1220;
+      color: var(--text);
+      padding: 0 10px;
+      font-size: 14px;
+    }
+    button { cursor: pointer; }
+    button.primary { background: #0284c7; border-color: #0ea5e9; }
+    button.ghost { background: #111827; }
+    .status { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; }
+    .dot.ok { background: var(--ok); }
+    .dot.bad { background: var(--bad); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .k { color: var(--muted); font-size: 12px; }
+    .v { margin-top: 6px; font-size: 28px; font-weight: 700; }
+    .meta { margin-top: 10px; color: var(--muted); font-size: 12px; display:flex; gap:14px; flex-wrap:wrap; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid #475569;
+      font-size: 12px;
+      color: #cbd5e1;
+      background: #0b1220;
+    }
+    .badge.net { border-color: #0ea5e9; color: #7dd3fc; }
+    .phase-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .phase-title { font-size: 13px; color: #93c5fd; margin-bottom: 6px; }
+    .phase-mini { display:grid; grid-template-columns: 1fr 1fr; gap:6px 10px; font-size: 12px; }
+    .phase-mini .k { font-size: 12px; }
+    .phase-mini .v { font-size: 14px; margin: 0; font-weight: 600; text-align: right; }
+    pre {
+      margin: 0;
+      background: #020617;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      color: #bfdbfe;
+      overflow: auto;
+      max-height: 280px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .tip { color: var(--muted); font-size: 12px; margin-top: 8px; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Local Monitor Lite</h1>
+    <div class="sub">Static frontend dashboard (reads <code>/api/monitorjson</code>)</div>
+
+    <section class="panel">
+      <div class="row">
+        <div class="field">
+          <label>Meter IP</label>
+          <input id="meterIp" placeholder="e.g. 192.168.1.100" />
+        </div>
+        <div class="field">
+          <label>Refresh Interval (sec)</label>
+          <select id="intervalSec">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="5">5</option>
+            <option value="10">10</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Timeout (ms)</label>
+          <select id="timeoutMs">
+            <option value="3000">3000</option>
+            <option value="5000" selected>5000</option>
+            <option value="8000">8000</option>
+          </select>
+        </div>
+        <button class="primary" id="startBtn">Start</button>
+        <button class="ghost" id="stopBtn">Stop</button>
+      </div>
+      <div class="tip">Ensure browser and meter are on the same LAN. Data URL:<span id="urlText">-</span></div>
+    </section>
+
+    <section class="panel">
+      <div class="status"><span id="dot" class="dot"></span><span id="stateText">Stopped</span></div>
+      <div class="meta">
+        <span>Latency: <strong id="latency">-</strong></span>
+        <span>Updated: <strong id="updatedAt">-</strong></span>
+        <span>Error: <strong id="errorText">-</strong></span>
+        <span id="overviewMode" class="badge">Overview Mode: Normal Aggregate</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="grid">
+        <div class="card"><div class="k">Voltage (V)</div><div id="voltage" class="v">--</div></div>
+        <div class="card"><div class="k">Current (A)</div><div id="current" class="v">--</div></div>
+        <div class="card"><div class="k">Power (W)</div><div id="power" class="v">--</div></div>
+        <div class="card"><div class="k">Import Energy (kWh)</div><div id="importEnergy" class="v">--</div></div>
+        <div class="card"><div class="k">Export Energy (kWh)</div><div id="exportEnergy" class="v">--</div></div>
+        <div class="card"><div class="k">Frequency (Hz)</div><div id="freq" class="v">--</div></div>
+        <div class="card"><div class="k">Power Factor (PF)</div><div id="pf" class="v">--</div></div>
+        <div class="card"><div class="k">Reactive Power (var)</div><div id="reactivePower" class="v">--</div></div>
+        <div class="card"><div class="k">Reactive Energy Inductive (kvarh)</div><div id="reactiveInductive" class="v">--</div></div>
+        <div class="card"><div class="k">Reactive Energy Capacitive (kvarh)</div><div id="reactiveCapacitive" class="v">--</div></div>
+      </div>
+
+      <div class="phase-grid" id="phaseGrid" style="display:none">
+        <div class="card">
+          <div class="phase-title">Phase A</div>
+          <div class="phase-mini">
+            <div class="k">V</div><div id="a_voltage" class="v">--</div>
+            <div class="k">A</div><div id="a_current" class="v">--</div>
+            <div class="k">W</div><div id="a_power" class="v">--</div>
+            <div class="k">kWh+</div><div id="a_import" class="v">--</div>
+            <div class="k">kWh-</div><div id="a_export" class="v">--</div>
+            <div class="k">Hz</div><div id="a_freq" class="v">--</div>
+            <div class="k">PF</div><div id="a_pf" class="v">--</div>
+            <div class="k">Q(var)</div><div id="a_q" class="v">--</div>
+            <div class="k">Q+(kvarh)</div><div id="a_qi" class="v">--</div>
+            <div class="k">Q-(kvarh)</div><div id="a_qc" class="v">--</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="phase-title">Phase B</div>
+          <div class="phase-mini">
+            <div class="k">V</div><div id="b_voltage" class="v">--</div>
+            <div class="k">A</div><div id="b_current" class="v">--</div>
+            <div class="k">W</div><div id="b_power" class="v">--</div>
+            <div class="k">kWh+</div><div id="b_import" class="v">--</div>
+            <div class="k">kWh-</div><div id="b_export" class="v">--</div>
+            <div class="k">Hz</div><div id="b_freq" class="v">--</div>
+            <div class="k">PF</div><div id="b_pf" class="v">--</div>
+            <div class="k">Q(var)</div><div id="b_q" class="v">--</div>
+            <div class="k">Q+(kvarh)</div><div id="b_qi" class="v">--</div>
+            <div class="k">Q-(kvarh)</div><div id="b_qc" class="v">--</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="phase-title">Phase C</div>
+          <div class="phase-mini">
+            <div class="k">V</div><div id="c_voltage" class="v">--</div>
+            <div class="k">A</div><div id="c_current" class="v">--</div>
+            <div class="k">W</div><div id="c_power" class="v">--</div>
+            <div class="k">kWh+</div><div id="c_import" class="v">--</div>
+            <div class="k">kWh-</div><div id="c_export" class="v">--</div>
+            <div class="k">Hz</div><div id="c_freq" class="v">--</div>
+            <div class="k">PF</div><div id="c_pf" class="v">--</div>
+            <div class="k">Q(var)</div><div id="c_q" class="v">--</div>
+            <div class="k">Q+(kvarh)</div><div id="c_qi" class="v">--</div>
+            <div class="k">Q-(kvarh)</div><div id="c_qc" class="v">--</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="k" style="margin-bottom:8px">Raw JSON</div>
+      <pre id="raw">Waiting for data...</pre>
+    </section>
+  </div>
+
+  <script>
+    const els = {
+      meterIp: document.getElementById('meterIp'),
+      intervalSec: document.getElementById('intervalSec'),
+      timeoutMs: document.getElementById('timeoutMs'),
+      startBtn: document.getElementById('startBtn'),
+      stopBtn: document.getElementById('stopBtn'),
+      urlText: document.getElementById('urlText'),
+      dot: document.getElementById('dot'),
+      stateText: document.getElementById('stateText'),
+      latency: document.getElementById('latency'),
+      updatedAt: document.getElementById('updatedAt'),
+      errorText: document.getElementById('errorText'),
+      raw: document.getElementById('raw'),
+      voltage: document.getElementById('voltage'),
+      current: document.getElementById('current'),
+      power: document.getElementById('power'),
+      importEnergy: document.getElementById('importEnergy'),
+      exportEnergy: document.getElementById('exportEnergy'),
+      freq: document.getElementById('freq'),
+      pf: document.getElementById('pf'),
+      reactivePower: document.getElementById('reactivePower'),
+      reactiveInductive: document.getElementById('reactiveInductive'),
+      reactiveCapacitive: document.getElementById('reactiveCapacitive'),
+      phaseGrid: document.getElementById('phaseGrid'),
+      overviewMode: document.getElementById('overviewMode')
+    };
+
+    const phaseEls = {
+      a: {
+        voltage: document.getElementById('a_voltage'), current: document.getElementById('a_current'), power: document.getElementById('a_power'),
+        importEnergy: document.getElementById('a_import'), exportEnergy: document.getElementById('a_export'), freq: document.getElementById('a_freq'),
+        pf: document.getElementById('a_pf'), reactivePower: document.getElementById('a_q'), reactiveInductive: document.getElementById('a_qi'), reactiveCapacitive: document.getElementById('a_qc')
+      },
+      b: {
+        voltage: document.getElementById('b_voltage'), current: document.getElementById('b_current'), power: document.getElementById('b_power'),
+        importEnergy: document.getElementById('b_import'), exportEnergy: document.getElementById('b_export'), freq: document.getElementById('b_freq'),
+        pf: document.getElementById('b_pf'), reactivePower: document.getElementById('b_q'), reactiveInductive: document.getElementById('b_qi'), reactiveCapacitive: document.getElementById('b_qc')
+      },
+      c: {
+        voltage: document.getElementById('c_voltage'), current: document.getElementById('c_current'), power: document.getElementById('c_power'),
+        importEnergy: document.getElementById('c_import'), exportEnergy: document.getElementById('c_export'), freq: document.getElementById('c_freq'),
+        pf: document.getElementById('c_pf'), reactivePower: document.getElementById('c_q'), reactiveInductive: document.getElementById('c_qi'), reactiveCapacitive: document.getElementById('c_qc')
+      }
+    };
+
+    let timer = null;
+    const storeKey = 'local-monitor-lite-config';
+
+    function setStatus(kind, text) {
+      els.dot.className = 'dot ' + (kind === 'ok' ? 'ok' : kind === 'bad' ? 'bad' : '');
+      els.stateText.textContent = text;
+    }
+
+    function endpoint() {
+      const ip = (els.meterIp.value || '').trim();
+      return ip ? `http://${ip}/api/monitorjson` : '';
+    }
+
+    function saveConfig() {
+      localStorage.setItem(storeKey, JSON.stringify({
+        ip: els.meterIp.value.trim(),
+        intervalSec: els.intervalSec.value,
+        timeoutMs: els.timeoutMs.value
+      }));
+    }
+
+    function loadConfig() {
+      try {
+        const cfg = JSON.parse(localStorage.getItem(storeKey) || '{}');
+        if (cfg.ip) els.meterIp.value = cfg.ip;
+        if (cfg.intervalSec) els.intervalSec.value = String(cfg.intervalSec);
+        if (cfg.timeoutMs) els.timeoutMs.value = String(cfg.timeoutMs);
+      } catch {}
+    }
+
+    function pick(obj, keys) {
+      for (const k of keys) {
+        if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
+      }
+      return undefined;
+    }
+
+    function num(v) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    }
+
+    function format(v, digits = 2) {
+      return v === undefined ? '--' : v.toFixed(digits);
+    }
+
+    function render(data) {
+      els.raw.textContent = JSON.stringify(data, null, 2);
+
+      // 兼容不同字段命名
+      let voltage = num(pick(data, ['voltage', 'Voltage', 'v']));
+      let current = num(pick(data, ['current', 'Current', 'i']));
+      let power = num(pick(data, ['power', 'Power', 'p']));
+      let freq = num(pick(data, ['frequency', 'Frequency', 'hz', 'Hz']));
+      let pf = num(pick(data, ['pf', 'PF', 'powerfactor', 'powerFactor']));
+      let reactivePower;
+      let reactiveInductive;
+      let reactiveCapacitive;
+      let phaseRows = [];
+
+      // 某些固件可能在 monitor 数组中
+      const monitor0 = Array.isArray(data.monitor) ? data.monitor[0] : undefined;
+      let importEnergy = num(
+        pick(data, ['importenergy', 'importEnergy', 'total_import_kwh']) ??
+        pick(monitor0, ['importenergy', 'importEnergy', 'kwh'])
+      );
+      let exportEnergy = num(
+        pick(data, ['exportenergy', 'exportEnergy', 'total_export_kwh']) ??
+        pick(monitor0, ['exportenergy', 'exportEnergy'])
+      );
+
+      // 单相: Data = [电压, 电流, 功率, 用电量(import), 馈电量(export), 频率, 功率因数]
+      if (Array.isArray(data.Data) && data.Data.length >= 6) {
+        phaseRows = [data.Data];
+        voltage = voltage ?? num(data.Data[0]);
+        current = current ?? num(data.Data[1]);
+        power = power ?? num(data.Data[2]);
+        importEnergy = importEnergy ?? num(data.Data[3]);
+        exportEnergy = exportEnergy ?? num(data.Data[4]);
+        freq = freq ?? num(data.Data[5]);
+        pf = pf ?? num(data.Data[6]);
+      }
+
+      // 三相: Datas = [A相, B相, C相, (可选)NetMetering总览]
+      if (Array.isArray(data.Datas) && data.Datas.length >= 3) {
+        phaseRows = data.Datas.slice(0, 3);
+        const sum = (idx) => phaseRows.reduce((acc, row) => acc + (num(row?.[idx]) || 0), 0);
+        const avg = (idx) => sum(idx) / phaseRows.length;
+
+        // 默认：普通三相汇总
+        voltage = avg(0);
+        current = sum(1);
+        power = sum(2);
+        importEnergy = sum(3);
+        exportEnergy = sum(4);
+        freq = avg(5);
+        pf = avg(6);
+        els.overviewMode.className = 'badge';
+        els.overviewMode.textContent = 'Overview Mode: Normal Aggregate';
+
+        // 若存在第4组，按 NetMetering 总览优先显示
+        if (data.Datas.length >= 4 && Array.isArray(data.Datas[3])) {
+          const netRow = data.Datas[3];
+          voltage = num(netRow[0]);
+          current = num(netRow[1]);
+          power = num(netRow[2]);
+          importEnergy = num(netRow[3]);
+          exportEnergy = num(netRow[4]);
+          freq = num(netRow[5]);
+          pf = num(netRow[6]);
+          els.overviewMode.className = 'badge net';
+          els.overviewMode.textContent = 'Overview Mode: Net Metering';
+        }
+      } else {
+        els.overviewMode.className = 'badge';
+        els.overviewMode.textContent = 'Overview Mode: Normal Aggregate';
+      }
+
+      // EA.Reactive = [无功功率, 无功电能感性, 无功电能容性]
+      // 单相时通常一组，三相时通常三组（A/B/C）
+      const reactive = data?.EA?.Reactive;
+      if (Array.isArray(reactive) && Array.isArray(reactive[0])) {
+        // 默认按A/B/C汇总
+        const reactivePhases = reactive.slice(0, 3);
+        reactivePower = reactivePhases.reduce((acc, row) => acc + (num(row?.[0]) || 0), 0);
+        reactiveInductive = reactivePhases.reduce((acc, row) => acc + (num(row?.[1]) || 0), 0);
+        reactiveCapacitive = reactivePhases.reduce((acc, row) => acc + (num(row?.[2]) || 0), 0);
+
+        // 若有第4组，优先作为NetMetering总览
+        if (reactive.length >= 4 && Array.isArray(reactive[3])) {
+          reactivePower = num(reactive[3][0]);
+          reactiveInductive = num(reactive[3][1]);
+          reactiveCapacitive = num(reactive[3][2]);
+        }
+      }
+
+      els.voltage.textContent = format(voltage, 1);
+      els.current.textContent = format(current, 2);
+      els.power.textContent = format(power, 1);
+      els.importEnergy.textContent = format(importEnergy, 3);
+      els.exportEnergy.textContent = format(exportEnergy, 3);
+      els.freq.textContent = format(freq, 2);
+      els.pf.textContent = format(pf, 2);
+      els.reactivePower.textContent = format(reactivePower, 1);
+      els.reactiveInductive.textContent = format(reactiveInductive, 3);
+      els.reactiveCapacitive.textContent = format(reactiveCapacitive, 3);
+
+      const phaseKeys = ['a', 'b', 'c'];
+      const hasThreePhase = phaseRows.length >= 3;
+      els.phaseGrid.style.display = hasThreePhase ? 'grid' : 'none';
+      phaseKeys.forEach((k, idx) => {
+        const row = phaseRows[idx] || [];
+        const rel = reactive?.[idx] || [];
+        const p = phaseEls[k];
+        p.voltage.textContent = format(num(row[0]), 1);
+        p.current.textContent = format(num(row[1]), 3);
+        p.power.textContent = format(num(row[2]), 1);
+        p.importEnergy.textContent = format(num(row[3]), 3);
+        p.exportEnergy.textContent = format(num(row[4]), 3);
+        p.freq.textContent = format(num(row[5]), 2);
+        p.pf.textContent = format(num(row[6]), 2);
+        p.reactivePower.textContent = format(num(rel[0]), 1);
+        p.reactiveInductive.textContent = format(num(rel[1]), 3);
+        p.reactiveCapacitive.textContent = format(num(rel[2]), 3);
+      });
+    }
+
+    async function fetchWithTimeout(url, timeoutMs) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      const started = performance.now();
+      try {
+        const res = await fetch(url, { signal: ctrl.signal });
+        const latency = Math.round(performance.now() - started);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        return { data, latency };
+      } finally {
+        clearTimeout(t);
+      }
+    }
+
+    async function tick() {
+      const url = endpoint();
+      if (!url) {
+        setStatus('', 'Stopped');
+        els.errorText.textContent = 'Please fill Meter IP first';
+        return;
+      }
+      els.urlText.textContent = url;
+
+      try {
+        const { data, latency } = await fetchWithTimeout(url, Number(els.timeoutMs.value));
+        render(data);
+        setStatus('ok', 'Running');
+        els.latency.textContent = `${latency} ms`;
+        els.updatedAt.textContent = new Date().toLocaleString();
+        els.errorText.textContent = '-';
+      } catch (err) {
+        setStatus('bad', 'Error');
+        els.errorText.textContent = (err && err.name === 'AbortError') ? 'Request timeout' : (err.message || String(err));
+      }
+    }
+
+    function start() {
+      stop();
+      saveConfig();
+      tick();
+      const ms = Math.max(1000, Number(els.intervalSec.value) * 1000);
+      timer = setInterval(tick, ms);
+    }
+
+    function stop() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      setStatus('', 'Stopped');
+    }
+
+    els.startBtn.addEventListener('click', start);
+    els.stopBtn.addEventListener('click', stop);
+    [els.meterIp, els.intervalSec, els.timeoutMs].forEach(el => {
+      el.addEventListener('change', saveConfig);
+      el.addEventListener('blur', saveConfig);
+    });
+
+    loadConfig();
+    els.urlText.textContent = endpoint() || '-';
+  </script>
+</body>
+</html>

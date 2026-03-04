@@ -1,0 +1,20 @@
+{
+  "id": "local-monitor-lite",
+  "name": "Local Monitor Lite",
+  "author": "miwyf",
+  "description": "A pure static dashboard for IAMMETER meters with configurable IP, refresh interval, timeout, and live /api/monitorjson display.",
+  "version": "0.1.0",
+  "category": "monitoring",
+  "type": "open-source",
+  "runtime": "static",
+  "tags": ["static", "dashboard", "iammeter", "monitorjson"],
+  "entry": "frontend/index.html",
+  "configSchema": [],
+  "links": {
+    "homepage": "https://github.com/IAMMETER/appstore/tree/main/apps/local-monitor-lite",
+    "docs": "https://github.com/IAMMETER/appstore/blob/main/apps/local-monitor-lite/README.md",
+    "source": "https://github.com/IAMMETER/appstore",
+    "preview": "https://iammeter.github.io/appstore/apps/local-monitor-lite/frontend/index.html",
+    "screenshot": "https://iammeter.github.io/appstore/apps/local-monitor-lite/screenshot.jpg"
+  }
+}
