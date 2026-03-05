@@ -1,166 +1,173 @@
-# Local Monitor Lite
+- # Local Monitor Lite
 
-A lightweight **static** dashboard for IAMMETER local devices.
+  A lightweight local monitoring tool for IAMMETER, focused on intelligent data adaptation and quick setup.
 
-It reads meter data directly from:
+  Local Monitor Lite automatically recognizes and adapts to:
 
-`http://<meter-ip>/api/monitorjson`
+  - single-phase meters
+  - three-phase meters
+  - net metering scenarios
+  - reactive power / reactive energy fields
 
-No backend service is required.
+  It is designed for fast onboarding, practical day-to-day monitoring, and developer-friendly troubleshooting.
 
----
+  It reads meter data directly from:
 
-## Screenshot
+  `http://<meter-ip>/api/monitorjson`
 
-![Meter Monitor Lite Screenshot](./screenshot.jpg)
+  ---
 
----
+  ## Screenshot
 
-## Table of Contents
+  ![Meter Monitor Lite Screenshot](./screenshot.jpg)
 
-- [Screenshot](#screenshot)
-- [Features](#features)
-- [How to Use](#how-to-use)
-  - [Step 1 – Configure Connection](#step-1--configure-connection)
-  - [Step 2 – Start Monitoring](#step-2--start-monitoring)
-- [Data Compatibility](#data-compatibility)
-  - [Single-Phase Payload](#single-phase-payload)
-  - [Three-Phase Payload](#three-phase-payload)
-  - [Net Metering Priority](#net-metering-priority)
-- [How to Run](#how-to-run)
-  - [Option A – Open Directly](#option-a--open-directly)
-  - [Option B – Host with a Web Server](#option-b--host-with-a-web-server)
-- [Project Structure](#project-structure)
-- [Troubleshooting](#troubleshooting)
-- [References](#references)
+  ---
 
----
+  ## Table of Contents
 
-## Features
+  - [Screenshot](#screenshot)
+  - [Features](#features)
+  - [How to Use](#how-to-use)
+    - [Step 1 – Configure Connection](#step-1--configure-connection)
+    - [Step 2 – Start Monitoring](#step-2--start-monitoring)
+  - [Data Compatibility](#data-compatibility)
+    - [Single-Phase Payload](#single-phase-payload)
+    - [Three-Phase Payload](#three-phase-payload)
+    - [Net Metering Priority](#net-metering-priority)
+  - [How to Run](#how-to-run)
+    - [Option A – Open Directly](#option-a--open-directly)
+    - [Option B – Host with a Web Server](#option-b--host-with-a-web-server)
+  - [Project Structure](#project-structure)
+  - [Troubleshooting](#troubleshooting)
+  - [References](#references)
 
-- Configurable **Meter IP**
-- Configurable **refresh interval** and **request timeout**
-- Live status indicator (**Running / Error / Stopped**)
-- Overview cards for key metrics:
-  - Voltage, Current, Power
-  - Import/Export Energy
-  - Frequency, Power Factor
-  - Reactive Power, Reactive Energy (Inductive/Capacitive)
-- Supports both:
-  - single-phase `Data`
-  - three-phase `Datas` (A/B/C)
-- Three-phase panel with per-phase metrics:
-  - V / A / W / kWh+ / kWh- / Hz / PF / Q / Q+ / Q-
-- **Net Metering mode detection**:
-  - if `Datas[3]` exists, overview uses this row as priority
-  - overview badge switches to `Overview Mode: Net Metering`
-- Raw JSON viewer for debugging
-- Local settings persistence via `localStorage`
+  ---
 
----
+  ## Features
 
-## How to Use
+  - Configurable **Meter IP**
+  - Configurable **refresh interval** and **request timeout**
+  - Live status indicator (**Running / Error / Stopped**)
+  - Overview cards for key metrics:
+    - Voltage, Current, Power
+    - Import/Export Energy
+    - Frequency, Power Factor
+    - Reactive Power, Reactive Energy (Inductive/Capacitive)
+  - Supports both:
+    - single-phase `Data`
+    - three-phase `Datas` (A/B/C)
+  - Three-phase panel with per-phase metrics:
+    - V / A / W / kWh+ / kWh- / Hz / PF / Q / Q+ / Q-
+  - **Net Metering mode detection**:
+    - if `Datas[3]` exists, overview uses this row as priority
+    - overview badge switches to `Overview Mode: Net Metering`
+  - Raw JSON viewer for debugging
+  - Local settings persistence via `localStorage`
 
-### Step 1 – Configure Connection
+  ---
 
-1. Open the page.
-2. Enter **Meter IP** (example: `192.168.1.100`).
-3. Select refresh interval and timeout.
+  ## How to Use
 
-### Step 2 – Start Monitoring
+  ### Step 1 – Configure Connection
 
-1. Click **Start**.
-2. Confirm status becomes **Running**.
-3. Check the overview mode badge:
-   - `Overview Mode: Normal Aggregate`
-   - or `Overview Mode: Net Metering`
+  1. Open the page.
+  2. Enter **Meter IP** (example: `192.168.1.100`).
+  3. Select refresh interval and timeout.
 
----
+  ### Step 2 – Start Monitoring
 
-## Data Compatibility
+  1. Click **Start**.
+  2. Confirm status becomes **Running**.
+  3. Check the overview mode badge:
+     - `Overview Mode: Normal Aggregate`
+     - or `Overview Mode: Net Metering`
 
-### Single-Phase Payload
+  ---
 
-Uses `Data` array:
+  ## Data Compatibility
 
-`[Voltage, Current, Power, ImportEnergy, ExportEnergy, Frequency, PF]`
+  ### Single-Phase Payload
 
-Reactive values are read from `EA.Reactive[0]` when available.
+  Uses `Data` array:
 
-### Three-Phase Payload
+  `[Voltage, Current, Power, ImportEnergy, ExportEnergy, Frequency, PF]`
 
-Uses `Datas[0..2]` for **Phase A/B/C**.
+  Reactive values are read from `EA.Reactive[0]` when available.
 
-Overview defaults to aggregate:
+  ### Three-Phase Payload
 
-- Voltage/Frequency/PF: average of A/B/C
-- Current/Power/Import/Export: sum of A/B/C
+  Uses `Datas[0..2]` for **Phase A/B/C**.
 
-Reactive overview defaults to sum of `EA.Reactive[0..2]`.
+  Overview defaults to aggregate:
 
-### Net Metering Priority
+  - Voltage/Frequency/PF: average of A/B/C
+  - Current/Power/Import/Export: sum of A/B/C
 
-If an additional 4th row exists:
+  Reactive overview defaults to sum of `EA.Reactive[0..2]`.
 
-- `Datas[3]` → overview values use this row first
-- `EA.Reactive[3]` (if present) → overview reactive values use this row first
+  ### Net Metering Priority
 
-Badge displays `Overview Mode: Net Metering`.
+  If an additional 4th row exists:
 
----
+  - `Datas[3]` → overview values use this row first
+  - `EA.Reactive[3]` (if present) → overview reactive values use this row first
 
-## How to Run
+  Badge displays `Overview Mode: Net Metering`.
 
-### Option A – Open Directly
+  ---
 
-Open:
+  ## How to Run
 
-`frontend/index.html`
+  ### Option A – Open Directly
 
-No installation or server setup required.
+  Open:
 
-### Option B – Host with a Web Server
+  `frontend/index.html`
 
-You can host it via Nginx/Apache/GitHub Pages/NAS, or run locally:
+  No installation or server setup required.
 
-```bash
-python -m http.server
-```
+  ### Option B – Host with a Web Server
 
-Then open:
+  You can host it via Nginx/Apache/GitHub Pages/NAS, or run locally:
 
-`http://localhost:8000/apps/local-monitor-lite/frontend/index.html`
+  ```bash
+  python -m http.server
+  ```
 
----
+  Then open:
 
-## Project Structure
+  `http://localhost:8000/apps/local-monitor-lite/frontend/index.html`
 
-```text
-apps/local-monitor-lite/
-  manifest.json
-  README.md
-  frontend/
-    index.html
-  screenshot.jpg (optional)
-```
+  ---
 
----
+  ## Project Structure
 
-## Troubleshooting
+  ```text
+  apps/local-monitor-lite/
+    manifest.json
+    README.md
+    frontend/
+      index.html
+    screenshot.jpg (optional)
+  ```
 
-- **No data / timeout**
-  - verify meter IP is correct
-  - ensure browser and meter are in the same LAN
-  - check network/firewall routing
-- **HTTP error**
-  - verify `/api/monitorjson` is accessible from browser
-- **Unexpected values**
-  - open Raw JSON panel and verify payload structure (`Data` vs `Datas`)
+  ---
 
----
+  ## Troubleshooting
 
-## References
+  - **No data / timeout**
+    - verify meter IP is correct
+    - ensure browser and meter are in the same LAN
+    - check network/firewall routing
+  - **HTTP error**
+    - verify `/api/monitorjson` is accessible from browser
+  - **Unexpected values**
+    - open Raw JSON panel and verify payload structure (`Data` vs `Datas`)
 
-- IAMMETER App Store: https://www.iammeter.com/app-store
-- IAMMETER AppStore repo: https://github.com/IAMMETER/appstore/tree/main
-- Example static README (reference style): https://github.com/IAMMETER/appstore/blob/main/apps/example-static/README.md
+  ---
+
+  ## References
+
+  - IAMMETER App Store: https://www.iammeter.com/app-store
+  - IAMMETER AppStore repo: https://github.com/IAMMETER/appstore/tree/main
+  - Example static README (reference style): https://github.com/IAMMETER/appstore/blob/main/apps/example-static/README.md
